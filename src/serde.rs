@@ -1,6 +1,6 @@
 pub(crate) mod ser {
-    use serde::{ser, Serialize};
     use crate::{Value, values};
+    use serde::{Serialize, ser};
 
     pub(crate) struct Serializer {
         pub(crate) value: Value,
@@ -8,9 +8,7 @@ pub(crate) mod ser {
 
     impl Serializer {
         pub(crate) fn new() -> Self {
-            Self {
-                value: Value::Nil,
-            }
+            Self { value: Value::Nil }
         }
     }
 
@@ -30,7 +28,7 @@ pub(crate) mod ser {
         }
     }
 
-    impl std::error::Error for Error { }
+    impl std::error::Error for Error {}
 
     impl ser::Error for Error {
         fn custom<T>(_: T) -> Self {
@@ -118,7 +116,7 @@ pub(crate) mod ser {
         fn serialize_bytes(self, v: &[u8]) -> Result<()> {
             self.value = Value::Bytes(v.to_vec().into());
             Ok(())
-        }    
+        }
 
         fn serialize_none(self) -> Result<()> {
             self.value = values::Variant::new_none().into();
@@ -156,11 +154,7 @@ pub(crate) mod ser {
             Ok(())
         }
 
-        fn serialize_newtype_struct<T>(
-            self,
-            _name: &'static str,
-            value: &T,
-        ) -> Result<()>
+        fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<()>
         where
             T: ?Sized + Serialize,
         {
@@ -238,7 +232,8 @@ pub(crate) mod ser {
             _len: usize,
         ) -> Result<Self::SerializeStructVariant> {
             let variant = variant_index as i64;
-            self.value = values::Variant::new_variant(variant, values::Structure::new().into()).into();
+            self.value =
+                values::Variant::new_variant(variant, values::Structure::new().into()).into();
             Ok(self)
         }
     }
@@ -436,8 +431,7 @@ pub(crate) mod ser {
 
 pub(crate) mod de {
     use serde::de::{
-        self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess,
-        VariantAccess, Visitor,
+        self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor,
     };
 
     use crate::{Value, values};
@@ -445,11 +439,9 @@ pub(crate) mod de {
         pub(crate) input: Option<&'a mut Value>,
     }
 
-    impl <'a>  Deserializer<'a> {
+    impl<'a> Deserializer<'a> {
         pub(crate) fn new(value: &'a mut Value) -> Self {
-            Self {
-                input: Some(value)
-            }
+            Self { input: Some(value) }
         }
     }
 
@@ -469,7 +461,7 @@ pub(crate) mod de {
         }
     }
 
-    impl std::error::Error for Error { }
+    impl std::error::Error for Error {}
 
     impl de::Error for Error {
         fn custom<T>(_: T) -> Self {
@@ -501,7 +493,7 @@ pub(crate) mod de {
                 Some(v @ Value::Variant(_)) => {
                     self.input = Some(v);
                     self.deserialize_enum("", &[], visitor)
-                },
+                }
                 Some(Value::Structure(a)) => visitor.visit_seq(a),
                 Some(Value::Array(a)) => visitor.visit_seq(a),
                 Some(Value::Map(a)) => visitor.visit_map(a),
@@ -658,8 +650,12 @@ pub(crate) mod de {
             match self.input.take() {
                 Some(Value::FixInt(v)) if *v >= 0 => visitor.visit_char(*v as u8 as char),
                 Some(Value::U8(v)) => visitor.visit_char(*v as _),
-                Some(Value::U16(v)) => visitor.visit_char(char::from_u32(*v as _).ok_or(Error::Mismatch)?),
-                Some(Value::U32(v)) => visitor.visit_char(char::from_u32(*v).ok_or(Error::Mismatch)?),
+                Some(Value::U16(v)) => {
+                    visitor.visit_char(char::from_u32(*v as _).ok_or(Error::Mismatch)?)
+                }
+                Some(Value::U32(v)) => {
+                    visitor.visit_char(char::from_u32(*v).ok_or(Error::Mismatch)?)
+                }
                 _ => return Err(Error::Mismatch),
             }
         }
@@ -672,7 +668,7 @@ pub(crate) mod de {
                 let str = str::from_utf8(&v.inner).map_err(|_| Error::Mismatch)?;
                 visitor.visit_str(str)
             } else {
-                return Err(Error::Mismatch)
+                return Err(Error::Mismatch);
             }
         }
 
@@ -684,7 +680,7 @@ pub(crate) mod de {
                 let str = String::try_from(v.inner.clone()).map_err(|_| Error::Mismatch)?;
                 visitor.visit_string(str)
             } else {
-                return Err(Error::Mismatch)
+                return Err(Error::Mismatch);
             }
         }
 
@@ -695,7 +691,7 @@ pub(crate) mod de {
             if let Some(Value::Bytes(v)) = self.input.take() {
                 visitor.visit_bytes(&v.inner)
             } else {
-                return Err(Error::Mismatch)
+                return Err(Error::Mismatch);
             }
         }
 
@@ -706,7 +702,7 @@ pub(crate) mod de {
             if let Some(Value::Bytes(v)) = self.input.take() {
                 visitor.visit_byte_buf(v.inner.clone())
             } else {
-                return Err(Error::Mismatch)
+                return Err(Error::Mismatch);
             }
         }
 
@@ -719,7 +715,7 @@ pub(crate) mod de {
             };
 
             if let Some((_, val)) = inner {
-                let mut this = Deserializer::new(&mut* val);
+                let mut this = Deserializer::new(&mut *val);
                 visitor.visit_some(&mut this)
             } else {
                 visitor.visit_none()
@@ -736,22 +732,14 @@ pub(crate) mod de {
             visitor.visit_unit()
         }
 
-        fn deserialize_unit_struct<V>(
-            self,
-            _name: &'static str,
-            visitor: V,
-        ) -> Result<V::Value>
+        fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
         where
             V: Visitor<'de>,
         {
             self.deserialize_unit(visitor)
         }
 
-        fn deserialize_newtype_struct<V>(
-            self,
-            _name: &'static str,
-            visitor: V,
-        ) -> Result<V::Value>
+        fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
         where
             V: Visitor<'de>,
         {
@@ -840,15 +828,15 @@ pub(crate) mod de {
         }
     }
 
-    impl <'a, 'de> SeqAccess<'de> for &'a mut values::Array {
+    impl<'a, 'de> SeqAccess<'de> for &'a mut values::Array {
         type Error = Error;
 
         fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
-            where
-                T: DeserializeSeed<'de>,
-        { 
+        where
+            T: DeserializeSeed<'de>,
+        {
             let Some(mut next) = self.values.pop_front() else {
-                return Ok(None)
+                return Ok(None);
             };
 
             let mut this = Deserializer::new(&mut next);
@@ -856,15 +844,15 @@ pub(crate) mod de {
         }
     }
 
-    impl <'a, 'de> SeqAccess<'de> for &'a mut values::Structure {
+    impl<'a, 'de> SeqAccess<'de> for &'a mut values::Structure {
         type Error = Error;
 
         fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
-            where
-                T: DeserializeSeed<'de>,
-        { 
+        where
+            T: DeserializeSeed<'de>,
+        {
             let Some(mut next) = self.values.pop_front() else {
-                return Ok(None)
+                return Ok(None);
             };
 
             let mut this = Deserializer::new(&mut next);
@@ -872,7 +860,7 @@ pub(crate) mod de {
         }
     }
 
-    impl <'a, 'de> MapAccess<'de> for &'a mut values::Map {
+    impl<'a, 'de> MapAccess<'de> for &'a mut values::Map {
         type Error = Error;
 
         fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
@@ -900,7 +888,7 @@ pub(crate) mod de {
         }
     }
 
-    impl <'a, 'de> EnumAccess<'de> for &'a mut Deserializer<'a> {
+    impl<'a, 'de> EnumAccess<'de> for &'a mut Deserializer<'a> {
         type Error = Error;
         type Variant = Self;
         fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
@@ -911,7 +899,10 @@ pub(crate) mod de {
                 return Err(Error::Mismatch);
             };
 
-            let (variant, val) = inner.as_mut().map(|(v1, v2)| (*v1, &mut **v2)).unwrap_or((-1, unsafe { MUT_NIL }));
+            let (variant, val) = inner
+                .as_mut()
+                .map(|(v1, v2)| (*v1, &mut **v2))
+                .unwrap_or((-1, unsafe { MUT_NIL }));
             self.input = Some(val);
             let mut variant = variant.put();
             let mut this = Deserializer::new(&mut variant);
@@ -923,7 +914,7 @@ pub(crate) mod de {
 
     static mut MUT_NIL: &'static mut Value = &mut Value::Nil;
 
-    impl<'a, 'de> VariantAccess<'de> for  &'a mut Deserializer<'a> {
+    impl<'a, 'de> VariantAccess<'de> for &'a mut Deserializer<'a> {
         type Error = Error;
 
         fn unit_variant(self) -> Result<()> {
@@ -944,11 +935,7 @@ pub(crate) mod de {
             de::Deserializer::deserialize_seq(self, visitor)
         }
 
-        fn struct_variant<V>(
-            self,
-            fields: &'static [&'static str],
-            visitor: V,
-        ) -> Result<V::Value>
+        fn struct_variant<V>(self, fields: &'static [&'static str], visitor: V) -> Result<V::Value>
         where
             V: Visitor<'de>,
         {

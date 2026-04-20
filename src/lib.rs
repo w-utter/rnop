@@ -1,8 +1,8 @@
-mod take;
 mod put;
-mod values;
 #[cfg(feature = "serde")]
 mod serde;
+mod take;
+mod values;
 
 #[derive(Debug, PartialEq)]
 pub enum Value {
@@ -138,7 +138,9 @@ pub fn to_value<T: ::serde::Serialize>(val: &T) -> Result<Value, crate::serde::s
 }
 
 #[cfg(feature = "serde")]
-pub fn from_value<T: ::serde::de::DeserializeOwned>(mut val: Value) -> Result<T, crate::serde::de::Error> {
+pub fn from_value<T: ::serde::de::DeserializeOwned>(
+    mut val: Value,
+) -> Result<T, crate::serde::de::Error> {
     let mut deserializer = crate::serde::de::Deserializer::new(&mut val);
     T::deserialize(&mut deserializer)
 }
@@ -149,16 +151,22 @@ mod tests {
     use super::take::TakeValue;
     #[test]
     fn given_example() {
-        let bytes = vec![0xBA, 0x04, 0xBD, 0x04, 0x61, 0x62, 0x63, 0x64, 0xBD, 0x04, 0x31, 0x32, 0x33, 0x34, 0xBD, 0x04, 0x41, 0x42, 0x43, 0x44, 0xBD, 0x04, 0x32, 0x34, 0x36, 0x38];
+        let bytes = vec![
+            0xBA, 0x04, 0xBD, 0x04, 0x61, 0x62, 0x63, 0x64, 0xBD, 0x04, 0x31, 0x32, 0x33, 0x34,
+            0xBD, 0x04, 0x41, 0x42, 0x43, 0x44, 0xBD, 0x04, 0x32, 0x34, 0x36, 0x38,
+        ];
         let (len, parsed) = Value::take_from(&bytes).unwrap();
         assert_eq!(len, bytes.len());
 
-        let value = super::Value::Array(vec![
-            String::from("abcd").into(), 
-            String::from("1234").into(), 
-            String::from("ABCD").into(),
-            String::from("2468").into(),
-        ].into());
+        let value = super::Value::Array(
+            vec![
+                String::from("abcd").into(),
+                String::from("1234").into(),
+                String::from("ABCD").into(),
+                String::from("2468").into(),
+            ]
+            .into(),
+        );
 
         let expected_size = value.expected_size();
 
@@ -172,7 +180,12 @@ mod tests {
 
         #[cfg(feature = "serde")]
         {
-            let s = (String::from("abcd"), String::from("1234"), String::from("ABCD"), String::from("2468"));
+            let s = (
+                String::from("abcd"),
+                String::from("1234"),
+                String::from("ABCD"),
+                String::from("2468"),
+            );
             let val = super::to_value(&s).unwrap();
             assert_eq!(val, value);
             let de = super::from_value::<(String, String, String, String)>(val).unwrap();

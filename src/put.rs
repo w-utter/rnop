@@ -17,15 +17,21 @@ pub(crate) trait WriteValue {
 }
 
 macro_rules! num_range {
-    ($i:ty) => ((<$i>::MIN as _)..= (<$i>::MAX as _))
+    ($i:ty) => {
+        (<$i>::MIN as _)..=(<$i>::MAX as _)
+    };
 }
 
 macro_rules! fixint_range {
-    () => (-64..=127)
+    () => {
+        -64..=127
+    };
 }
 
 macro_rules! fixuint_range {
-    () => (0..=127)
+    () => {
+        0..=127
+    };
 }
 
 impl PutValue for i8 {
@@ -86,7 +92,8 @@ impl PutValue for u8 {
     fn put(self) -> Value {
         if fixuint_range!().contains(&self) {
             Value::FixInt(self as _)
-        } else { Value::U8(self)
+        } else {
+            Value::U8(self)
         }
     }
 }
@@ -135,7 +142,10 @@ impl PutValue for u64 {
 
 use std::collections::VecDeque;
 
-pub(crate) fn write_values<W: std::io::Write>(values: &VecDeque<Value>, writer: &mut W) -> std::io::Result<usize> {
+pub(crate) fn write_values<W: std::io::Write>(
+    values: &VecDeque<Value>,
+    writer: &mut W,
+) -> std::io::Result<usize> {
     let mut written = 0;
     let len = (values.len() as u64).put();
     written += len.write(writer)?;
@@ -147,10 +157,17 @@ pub(crate) fn write_values<W: std::io::Write>(values: &VecDeque<Value>, writer: 
 
 pub(crate) fn values_expected_size(values: &VecDeque<Value>) -> u64 {
     let len = (values.len() as u64).put();
-    len.expected_size() + values.iter().map(|value| value.expected_size()).sum::<u64>()
+    len.expected_size()
+        + values
+            .iter()
+            .map(|value| value.expected_size())
+            .sum::<u64>()
 }
 
-pub(crate) fn write_bytes<W: std::io::Write>(bytes: &[u8], writer: &mut W) -> std::io::Result<usize> {
+pub(crate) fn write_bytes<W: std::io::Write>(
+    bytes: &[u8],
+    writer: &mut W,
+) -> std::io::Result<usize> {
     let mut written = 0;
     let len = (bytes.len() as u64).put();
     written += len.write(writer)?;

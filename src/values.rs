@@ -1,7 +1,7 @@
-use crate::take::TakeValue;
 use crate::Value;
-use crate::take;
 use crate::put;
+use crate::take;
+use crate::take::TakeValue;
 
 use std::collections::VecDeque;
 
@@ -30,10 +30,13 @@ impl TakeValue for Table {
             entries.push(entry);
         }
 
-        Some((total_size, Table {
-            hash,
-            entries: entries.into(),
-        }))
+        Some((
+            total_size,
+            Table {
+                hash,
+                entries: entries.into(),
+            },
+        ))
     }
 }
 
@@ -55,10 +58,15 @@ impl put::WriteValue for Table {
         use put::PutValue;
         let hash = self.hash.put();
         let entries = (self.entries.len() as u64).put();
-        1 + hash.expected_size() + entries.expected_size() + self.entries.iter().map(|entry| entry.expected_size()).sum::<u64>()
+        1 + hash.expected_size()
+            + entries.expected_size()
+            + self
+                .entries
+                .iter()
+                .map(|entry| entry.expected_size())
+                .sum::<u64>()
     }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub struct Entry {
@@ -77,10 +85,7 @@ impl Entry {
         let bytes = &bytes[size..(size + len as usize)];
         let (_, val) = Value::take_from(bytes)?;
         total_size += len as usize;
-        Some((total_size, Entry {
-            id,
-            val,
-        }))
+        Some((total_size, Entry { id, val }))
     }
 
     fn write<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<usize> {
@@ -112,9 +117,7 @@ pub struct Error {
 impl TakeValue for Error {
     fn take_from_raw(bytes: &[u8]) -> Option<(usize, Self)> {
         let (size, inner) = take::int64(&bytes[1..])?;
-        Some((size, Self {
-            inner,
-        }))
+        Some((size, Self { inner }))
     }
 }
 
@@ -153,10 +156,13 @@ impl TakeValue for Handle {
         let (size, ref_num) = take::int64(bytes)?;
         total_size += size;
 
-        Some((total_size, Self {
-            value: Box::new(value),
-            ref_num,
-        }))
+        Some((
+            total_size,
+            Self {
+                value: Box::new(value),
+                ref_num,
+            },
+        ))
     }
 }
 
@@ -182,7 +188,7 @@ impl put::WriteValue for Handle {
 
 #[derive(Debug, PartialEq)]
 pub struct Variant {
-    pub(crate) inner: Option<(i64, Box<Value>)>
+    pub(crate) inner: Option<(i64, Box<Value>)>,
 }
 
 impl Variant {
@@ -195,7 +201,9 @@ impl Variant {
     }
 
     pub fn new_variant(index: i64, val: Value) -> Self {
-        Self { inner: Some((index, Box::new(val)))}
+        Self {
+            inner: Some((index, Box::new(val))),
+        }
     }
 
     #[cfg(feature = "serde")]
@@ -234,15 +242,16 @@ impl TakeValue for Variant {
         } else {
             Some((variant, Box::new(value)))
         };
-        Some((total_size, Self {
-            inner,
-        }))
+        Some((total_size, Self { inner }))
     }
 }
 
 impl Variant {
     fn vs(&self) -> (&i64, &Value) {
-        self.inner.as_ref().map(|(v1, v2)| (v1, v2.as_ref())).unwrap_or((&-1i64, &Value::Nil))
+        self.inner
+            .as_ref()
+            .map(|(v1, v2)| (v1, v2.as_ref()))
+            .unwrap_or((&-1i64, &Value::Nil))
     }
 }
 
@@ -269,7 +278,6 @@ impl put::WriteValue for Variant {
     }
 }
 
-
 #[derive(Debug, PartialEq)]
 pub struct Structure {
     pub(crate) values: VecDeque<Value>,
@@ -287,9 +295,12 @@ impl TakeValue for Structure {
     fn take_from_raw(bytes: &[u8]) -> Option<(usize, Self)> {
         let (size, values) = take::values(bytes)?;
 
-        Some((size, Self {
-            values: values.into(),
-        }))
+        Some((
+            size,
+            Self {
+                values: values.into(),
+            },
+        ))
     }
 }
 
@@ -315,9 +326,7 @@ pub struct Array {
 
 impl From<Vec<Value>> for Array {
     fn from(f: Vec<Value>) -> Self {
-        Self {
-            values: f.into(),
-        }
+        Self { values: f.into() }
     }
 }
 
@@ -325,9 +334,12 @@ impl TakeValue for Array {
     fn take_from_raw(bytes: &[u8]) -> Option<(usize, Self)> {
         let (size, values) = take::values(bytes)?;
 
-        Some((size, Array {
-            values: values.into(),
-        }))
+        Some((
+            size,
+            Array {
+                values: values.into(),
+            },
+        ))
     }
 }
 
@@ -348,12 +360,14 @@ impl put::WriteValue for Array {
 
 #[derive(Debug, PartialEq)]
 pub struct Map {
-    pub(crate) entries: VecDeque<(Value, Value)>
+    pub(crate) entries: VecDeque<(Value, Value)>,
 }
 
 impl Map {
     pub fn new() -> Self {
-        Self { entries: vec![].into() }
+        Self {
+            entries: vec![].into(),
+        }
     }
 }
 
@@ -376,9 +390,12 @@ impl TakeValue for Map {
             entries.push((key, value))
         }
 
-        Some((total_size, Self {
-            entries: entries.into(),
-        }))
+        Some((
+            total_size,
+            Self {
+                entries: entries.into(),
+            },
+        ))
     }
 }
 
@@ -403,7 +420,12 @@ impl put::WriteValue for Map {
     fn expected_size(&self) -> u64 {
         use put::PutValue;
         let len = (self.entries.len() as u64).put();
-        1 + len.expected_size() + self.entries.iter().map(|(k, v)| k.expected_size() + v.expected_size()).sum::<u64>()
+        1 + len.expected_size()
+            + self
+                .entries
+                .iter()
+                .map(|(k, v)| k.expected_size() + v.expected_size())
+                .sum::<u64>()
     }
 }
 
@@ -414,18 +436,14 @@ pub struct Bytes {
 
 impl From<Vec<u8>> for Bytes {
     fn from(f: Vec<u8>) -> Self {
-        Self {
-            inner: f,
-        }
+        Self { inner: f }
     }
 }
 
 impl TakeValue for Bytes {
     fn take_from_raw(bytes: &[u8]) -> Option<(usize, Self)> {
         let (len, inner) = take::bytes(bytes)?;
-        Some((len, Self {
-            inner
-        }))
+        Some((len, Self { inner }))
     }
 }
 
@@ -467,9 +485,7 @@ impl From<std::string::String> for Value {
 impl TakeValue for String {
     fn take_from_raw(bytes: &[u8]) -> Option<(usize, Self)> {
         let (len, inner) = take::bytes(bytes)?;
-        Some((len, Self {
-            inner
-        }))
+        Some((len, Self { inner }))
     }
 }
 

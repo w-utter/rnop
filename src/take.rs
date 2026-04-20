@@ -40,23 +40,23 @@ macro_rules! impl_int {
     }
 }
 
-impl_int!{
-    u8 => U8, u16 => U16, u32 => U32, u64 => U64, 
+impl_int! {
+    u8 => U8, u16 => U16, u32 => U32, u64 => U64,
     i8 => I8, i16 => I16, i32 => I32, i64 => I64,
     f32 => F32, f64 => F64
 }
 
 use crate::values;
 
-into_value!{
-    values::Table => Table, 
+into_value! {
+    values::Table => Table,
     values::Error => Error,
     values::Handle => Handle,
-    values::Variant => Variant, 
-    values::Structure => Structure, 
-    values::Array => Array, 
-    values::Map => Map, 
-    values::Bytes => Bytes, 
+    values::Variant => Variant,
+    values::Structure => Structure,
+    values::Array => Array,
+    values::Map => Map,
+    values::Bytes => Bytes,
     values::String => String
 }
 
@@ -104,4 +104,3 @@ pub(crate) fn bytes(bytes: &[u8]) -> Option<(usize, Vec<u8>)> {
     let bytes = bytes.get(size + 1..total_len + 1)?;
     Some((total_len, bytes.to_vec()))
 }
-
