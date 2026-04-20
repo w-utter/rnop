@@ -62,7 +62,6 @@ into_value!{
 
 pub(crate) fn uint64(bytes: &[u8]) -> Option<(usize, u64)> {
     let bytes = &bytes[1..];
-    println!("{bytes:x?}");
     Some(match bytes.get(0)? {
         v @ 0..=0x7f => (1, *v as u64),
         0x80 => u8::take_from_raw(bytes).map(|(len, val)| (len + 1, val as u64))?,
