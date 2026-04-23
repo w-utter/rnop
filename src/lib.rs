@@ -213,7 +213,16 @@ mod tests {
     }
 
     #[test]
-    fn dai() {
-        //let bytes = vec![0xb9, 0x7, 0xb9, 0x3, 0x86, 0xff, 0x7f, 0xcd, 0x14, 0x86, 0x0, 0x1c, 0x2, 0x0, 0x86, 0xff, 0x9b, 0xcf, 0x14, 0xb9, 0x3, 0x86, 0x0, 0xe4, 0x6, ]
+    fn variant() {
+        let bytes = vec![184, 0, 186, 2, 129, 128, 7, 129, 176, 4];
+        let (len, parsed) = Value::take_from(&bytes).unwrap();
+        assert_eq!(len, bytes.len());
+        assert_eq!(
+            parsed,
+            crate::values::Variant::new_some(Value::Array(
+                vec![Value::U16(1920), Value::U16(1200)].into()
+            ))
+            .into()
+        )
     }
 }

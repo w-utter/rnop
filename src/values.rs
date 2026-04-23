@@ -232,7 +232,7 @@ impl TakeValue for Variant {
         let mut total_size = 0;
         let (size, variant) = take::int64(bytes)?;
         total_size += size;
-        let bytes = &bytes[size..];
+        let bytes = &bytes[size + 1..];
         let (size, value) = Value::take_from(bytes)?;
         total_size += size;
         let inner = if variant < -1 {
