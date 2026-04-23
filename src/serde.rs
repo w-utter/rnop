@@ -961,3 +961,29 @@ pub(crate) mod de {
         }
     }
 }
+
+#[test]
+fn variant() {
+    use crate::Value;
+    let value: crate::Value = crate::values::Variant::new_variant(
+        0,
+        Value::Array(vec![Value::U16(1920), Value::U16(1200)].into()),
+    )
+    .into();
+
+    #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
+    enum V<T> {
+        Single(T),
+        Pair(T, T),
+        Collection(Vec<T>),
+    }
+
+    let parsed = crate::from_value::<V<(u16, u16)>>(value).unwrap();
+
+    assert_eq!(parsed, V::Single((1920, 1200)));
+
+    let val = crate::to_value(&parsed).unwrap();
+    let mut w = vec![];
+    val.write(&mut w).unwrap();
+    assert_eq!(w, vec![184, 0, 186, 2, 129, 128, 7, 129, 176, 4])
+}
