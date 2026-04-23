@@ -152,7 +152,17 @@ pub fn to_value_with_options_as_variants<T: ::serde::Serialize>(
 pub fn from_value<T: ::serde::de::DeserializeOwned>(
     mut val: Value,
 ) -> Result<T, crate::serde::de::Error> {
-    let mut deserializer = crate::serde::de::Deserializer::new(&mut val);
+    let mut deserializer = crate::serde::de::Deserializer::new(&mut val, false);
+    T::deserialize(&mut deserializer)
+}
+
+/// does the exact same as `to_value`, except that Option<T> is will be expected to be a Variant<..> instead
+/// of Nil for None & the value of T for Some(..)
+#[cfg(feature = "serde")]
+pub fn from_value_with_options_as_variants<T: ::serde::de::DeserializeOwned>(
+    mut val: Value,
+) -> Result<T, crate::serde::de::Error> {
+    let mut deserializer = crate::serde::de::Deserializer::new(&mut val, true);
     T::deserialize(&mut deserializer)
 }
 

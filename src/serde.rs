@@ -449,11 +449,15 @@ pub(crate) mod de {
     use crate::{Value, values};
     pub(crate) struct Deserializer<'a> {
         pub(crate) input: Option<&'a mut Value>,
+        pub(crate) decode_option_as_variant: bool,
     }
 
     impl<'a> Deserializer<'a> {
-        pub(crate) fn new(value: &'a mut Value) -> Self {
-            Self { input: Some(value) }
+        pub(crate) fn new(value: &'a mut Value, decode_option_as_variant: bool) -> Self {
+            Self {
+                input: Some(value),
+                decode_option_as_variant,
+            }
         }
     }
 
@@ -506,9 +510,15 @@ pub(crate) mod de {
                     self.input = Some(v);
                     self.deserialize_enum("", &[], visitor)
                 }
-                Some(Value::Structure(a)) => visitor.visit_seq(a),
-                Some(Value::Array(a)) => visitor.visit_seq(a),
-                Some(Value::Map(a)) => visitor.visit_map(a),
+                Some(Value::Structure(a)) => {
+                    visitor.visit_seq(Ctx::new(a, self.decode_option_as_variant))
+                }
+                Some(Value::Array(a)) => {
+                    visitor.visit_seq(Ctx::new(a, self.decode_option_as_variant))
+                }
+                Some(Value::Map(a)) => {
+                    visitor.visit_map(Ctx::new(a, self.decode_option_as_variant))
+                }
                 Some(Value::Bytes(a)) => visitor.visit_bytes(&a.inner),
                 Some(Value::String(s)) => {
                     let str = str::from_utf8(&s.inner).map_err(|_| Error::Mismatch)?;
@@ -723,20 +733,22 @@ pub(crate) mod de {
             V: Visitor<'de>,
         {
             match self.input.take() {
-                Some(Value::Variant(values::Variant { inner })) => {
+                Some(Value::Variant(values::Variant { inner }))
+                    if self.decode_option_as_variant =>
+                {
                     if let Some((_, val)) = inner {
-                        let mut this = Deserializer::new(&mut *val);
+                        let mut this = Deserializer::new(&mut *val, self.decode_option_as_variant);
                         visitor.visit_some(&mut this)
                     } else {
                         visitor.visit_none()
                     }
                 }
-                Some(Value::Nil) => visitor.visit_none(),
-                Some(v) => {
+                Some(Value::Nil) if !self.decode_option_as_variant => visitor.visit_none(),
+                Some(v) if !self.decode_option_as_variant => {
                     self.input = Some(v);
                     visitor.visit_some(self)
                 }
-                None => Err(Error::Mismatch),
+                _ => Err(Error::Mismatch),
             }
         }
 
@@ -771,7 +783,7 @@ pub(crate) mod de {
             let Some(Value::Array(arr)) = self.input.take() else {
                 return Err(Error::Mismatch);
             };
-            visitor.visit_seq(arr)
+            visitor.visit_seq(Ctx::new(arr, self.decode_option_as_variant))
         }
 
         fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value>
@@ -801,7 +813,7 @@ pub(crate) mod de {
                 return Err(Error::Mismatch);
             };
 
-            visitor.visit_map(map)
+            visitor.visit_map(Ctx::new(map, self.decode_option_as_variant))
         }
 
         fn deserialize_struct<V>(
@@ -816,7 +828,7 @@ pub(crate) mod de {
             let Some(Value::Structure(st)) = self.input.take() else {
                 return Err(Error::Mismatch);
             };
-            visitor.visit_seq(st)
+            visitor.visit_seq(Ctx::new(st, self.decode_option_as_variant))
         }
 
         fn deserialize_enum<V>(
@@ -846,50 +858,64 @@ pub(crate) mod de {
         }
     }
 
-    impl<'a, 'de> SeqAccess<'de> for &'a mut values::Array {
+    impl<'a, 'de> SeqAccess<'de> for Ctx<'a, values::Array> {
         type Error = Error;
 
         fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
         where
             T: DeserializeSeed<'de>,
         {
-            let Some(mut next) = self.values.pop_front() else {
+            let Some(mut next) = self.inner.values.pop_front() else {
                 return Ok(None);
             };
 
-            let mut this = Deserializer::new(&mut next);
+            let mut this = Deserializer::new(&mut next, self.decode_option_as_variant);
             seed.deserialize(&mut this).map(Some)
         }
     }
 
-    impl<'a, 'de> SeqAccess<'de> for &'a mut values::Structure {
+    struct Ctx<'a, T> {
+        inner: &'a mut T,
+        decode_option_as_variant: bool,
+    }
+
+    impl<'a, T> Ctx<'a, T> {
+        fn new(inner: &'a mut T, decode_option_as_variant: bool) -> Self {
+            Self {
+                inner,
+                decode_option_as_variant,
+            }
+        }
+    }
+
+    impl<'a, 'de> SeqAccess<'de> for Ctx<'a, values::Structure> {
         type Error = Error;
 
         fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
         where
             T: DeserializeSeed<'de>,
         {
-            let Some(mut next) = self.values.pop_front() else {
+            let Some(mut next) = self.inner.values.pop_front() else {
                 return Ok(None);
             };
 
-            let mut this = Deserializer::new(&mut next);
+            let mut this = Deserializer::new(&mut next, self.decode_option_as_variant);
             seed.deserialize(&mut this).map(Some)
         }
     }
 
-    impl<'a, 'de> MapAccess<'de> for &'a mut values::Map {
+    impl<'a, 'de> MapAccess<'de> for Ctx<'a, values::Map> {
         type Error = Error;
 
         fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
         where
             K: DeserializeSeed<'de>,
         {
-            let Some((k, _)) = self.entries.front_mut() else {
+            let Some((k, _)) = self.inner.entries.front_mut() else {
                 return Ok(None);
             };
             let mut val = core::mem::replace(k, Value::Nil);
-            let mut this = Deserializer::new(&mut val);
+            let mut this = Deserializer::new(&mut val, self.decode_option_as_variant);
             seed.deserialize(&mut this).map(Some)
         }
 
@@ -897,11 +923,11 @@ pub(crate) mod de {
         where
             V: DeserializeSeed<'de>,
         {
-            let Some((_, mut val)) = self.entries.pop_front() else {
+            let Some((_, mut val)) = self.inner.entries.pop_front() else {
                 return Err(Error::Mismatch);
             };
 
-            let mut this = Deserializer::new(&mut val);
+            let mut this = Deserializer::new(&mut val, self.decode_option_as_variant);
             seed.deserialize(&mut this)
         }
     }
@@ -923,7 +949,7 @@ pub(crate) mod de {
                 .unwrap_or((-1, unsafe { MUT_NIL }));
             self.input = Some(val);
             let mut variant = variant.put();
-            let mut this = Deserializer::new(&mut variant);
+            let mut this = Deserializer::new(&mut variant, self.decode_option_as_variant);
             let val = seed.deserialize(&mut this)?;
 
             Ok((val, self))
@@ -986,4 +1012,36 @@ fn variant() {
     let mut w = vec![];
     val.write(&mut w).unwrap();
     assert_eq!(w, vec![184, 0, 186, 2, 129, 128, 7, 129, 176, 4])
+}
+
+#[test]
+fn nested_variants() {
+    #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
+    enum V<T> {
+        Single(T),
+        Pair(T, T),
+        Collection(Vec<T>),
+    }
+
+    #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
+    struct OptV<T> {
+        inner: Option<V<T>>,
+    }
+
+    let v = OptV {
+        inner: Some(V::Single((1920u16, 1200u16))),
+    };
+
+    let mut w = vec![];
+    let val = crate::to_value(&v).unwrap();
+    val.write(&mut w).unwrap();
+
+    let val = crate::Value::parse(&w).unwrap();
+    let v = crate::from_value::<OptV<(u16, u16)>>(val).unwrap();
+    assert_eq!(
+        v,
+        OptV {
+            inner: Some(V::Single((1920, 1200)))
+        }
+    );
 }
