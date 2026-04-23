@@ -4,11 +4,15 @@ pub(crate) mod ser {
 
     pub(crate) struct Serializer {
         pub(crate) value: Value,
+        pub(crate) encode_option_as_variant: bool,
     }
 
     impl Serializer {
-        pub(crate) fn new() -> Self {
-            Self { value: Value::Nil }
+        pub(crate) fn new(encode_option_as_variant: bool) -> Self {
+            Self {
+                value: Value::Nil,
+                encode_option_as_variant,
+            }
         }
     }
 
@@ -119,7 +123,11 @@ pub(crate) mod ser {
         }
 
         fn serialize_none(self) -> Result<()> {
-            self.value = values::Variant::new_none().into();
+            if self.encode_option_as_variant {
+                self.value = values::Variant::new_none().into();
+            } else {
+                self.value = Value::Nil
+            }
             Ok(())
         }
 
@@ -127,10 +135,14 @@ pub(crate) mod ser {
         where
             T: ?Sized + Serialize,
         {
-            let mut this = Serializer::new();
-            value.serialize(&mut this)?;
+            if self.encode_option_as_variant {
+                let mut this = Serializer::new(self.encode_option_as_variant);
+                value.serialize(&mut this)?;
 
-            self.value = values::Variant::new_some(this.value).into();
+                self.value = values::Variant::new_some(this.value).into();
+            } else {
+                value.serialize(self)?;
+            }
             Ok(())
         }
 
@@ -173,7 +185,7 @@ pub(crate) mod ser {
         {
             let index = variant_index as i64;
 
-            let mut this = Serializer::new();
+            let mut this = Serializer::new(self.encode_option_as_variant);
             value.serialize(&mut this)?;
 
             self.value = values::Variant::new_variant(index, this.value).into();
@@ -247,7 +259,7 @@ pub(crate) mod ser {
         where
             T: ?Sized + Serialize,
         {
-            let mut this = Serializer::new();
+            let mut this = Serializer::new(self.encode_option_as_variant);
             value.serialize(&mut this)?;
 
             let Value::Array(values::Array { values }) = &mut self.value else {
@@ -270,7 +282,7 @@ pub(crate) mod ser {
         where
             T: ?Sized + Serialize,
         {
-            let mut this = Serializer::new();
+            let mut this = Serializer::new(self.encode_option_as_variant);
             value.serialize(&mut this)?;
 
             let Value::Array(values::Array { values }) = &mut self.value else {
@@ -293,7 +305,7 @@ pub(crate) mod ser {
         where
             T: ?Sized + Serialize,
         {
-            let mut this = Serializer::new();
+            let mut this = Serializer::new(self.encode_option_as_variant);
             value.serialize(&mut this)?;
 
             let Value::Array(values::Array { values }) = &mut self.value else {
@@ -316,7 +328,7 @@ pub(crate) mod ser {
         where
             T: ?Sized + Serialize,
         {
-            let mut this = Serializer::new();
+            let mut this = Serializer::new(self.encode_option_as_variant);
             value.serialize(&mut this)?;
 
             let Value::Variant(v) = &mut self.value else {
@@ -344,7 +356,7 @@ pub(crate) mod ser {
         where
             T: ?Sized + Serialize,
         {
-            let mut this = Serializer::new();
+            let mut this = Serializer::new(self.encode_option_as_variant);
             key.serialize(&mut this)?;
 
             let Value::Map(values::Map { entries }) = &mut self.value else {
@@ -358,7 +370,7 @@ pub(crate) mod ser {
         where
             T: ?Sized + Serialize,
         {
-            let mut this = Serializer::new();
+            let mut this = Serializer::new(self.encode_option_as_variant);
             value.serialize(&mut this)?;
 
             let Value::Map(values::Map { entries }) = &mut self.value else {
@@ -385,7 +397,7 @@ pub(crate) mod ser {
         where
             T: ?Sized + Serialize,
         {
-            let mut this = Serializer::new();
+            let mut this = Serializer::new(self.encode_option_as_variant);
             value.serialize(&mut this)?;
 
             let Value::Structure(values::Structure { values }) = &mut self.value else {
@@ -408,7 +420,7 @@ pub(crate) mod ser {
         where
             T: ?Sized + Serialize,
         {
-            let mut this = Serializer::new();
+            let mut this = Serializer::new(self.encode_option_as_variant);
             value.serialize(&mut this)?;
 
             let Value::Variant(v) = &mut self.value else {
@@ -710,15 +722,21 @@ pub(crate) mod de {
         where
             V: Visitor<'de>,
         {
-            let Some(Value::Variant(values::Variant { inner })) = self.input.take() else {
-                return Err(Error::Mismatch);
-            };
-
-            if let Some((_, val)) = inner {
-                let mut this = Deserializer::new(&mut *val);
-                visitor.visit_some(&mut this)
-            } else {
-                visitor.visit_none()
+            match self.input.take() {
+                Some(Value::Variant(values::Variant { inner })) => {
+                    if let Some((_, val)) = inner {
+                        let mut this = Deserializer::new(&mut *val);
+                        visitor.visit_some(&mut this)
+                    } else {
+                        visitor.visit_none()
+                    }
+                }
+                Some(Value::Nil) => visitor.visit_none(),
+                Some(v) => {
+                    self.input = Some(v);
+                    visitor.visit_some(self)
+                }
+                None => Err(Error::Mismatch),
             }
         }
 

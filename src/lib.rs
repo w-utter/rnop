@@ -132,7 +132,18 @@ impl Value {
 
 #[cfg(feature = "serde")]
 pub fn to_value<T: ::serde::Serialize>(val: &T) -> Result<Value, crate::serde::ser::Error> {
-    let mut serializer = crate::serde::ser::Serializer::new();
+    let mut serializer = crate::serde::ser::Serializer::new(false);
+    val.serialize(&mut serializer)?;
+    Ok(serializer.value)
+}
+
+/// does the exact same as `to_value`, except that Option<T> is serialized into a Variant<..> instead
+/// of Nil for None & the value of T for Some(..)
+#[cfg(feature = "serde")]
+pub fn to_value_with_options_as_variants<T: ::serde::Serialize>(
+    val: &T,
+) -> Result<Value, crate::serde::ser::Error> {
+    let mut serializer = crate::serde::ser::Serializer::new(true);
     val.serialize(&mut serializer)?;
     Ok(serializer.value)
 }
