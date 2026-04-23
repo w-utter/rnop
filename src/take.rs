@@ -73,6 +73,7 @@ pub(crate) fn uint64(bytes: &[u8]) -> Option<(usize, u64)> {
 }
 
 pub(crate) fn int64(bytes: &[u8]) -> Option<(usize, i64)> {
+    let bytes = &bytes[1..];
     Some(match bytes.get(0)? {
         v @ (0..=0x7f | 0xc0..=0xff) => (1, i8::from_le_bytes([*v]) as i64),
         0x84 => i8::take_from_raw(bytes).map(|(len, val)| (len + 1, val as i64))?,
