@@ -538,9 +538,9 @@ pub(crate) mod de {
             };
 
             let inner = if *v == 0 {
-                true
-            } else if *v == 1 {
                 false
+            } else if *v == 1 {
+                true
             } else {
                 return Err(Error::Mismatch);
             };
