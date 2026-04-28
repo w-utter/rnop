@@ -780,10 +780,15 @@ pub(crate) mod de {
         where
             V: Visitor<'de>,
         {
-            let Some(Value::Array(arr)) = self.input.take() else {
-                return Err(Error::Mismatch);
-            };
-            visitor.visit_seq(Ctx::new(arr, self.decode_option_as_variant))
+            match self.input.take() {
+                Some(Value::Array(arr)) => {
+                    visitor.visit_seq(Ctx::new(arr, self.decode_option_as_variant))
+                }
+                Some(Value::Map(m)) => {
+                    visitor.visit_seq(Ctx::new(m, self.decode_option_as_variant))
+                }
+                _ => return Err(Error::Mismatch),
+            }
         }
 
         fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value>
@@ -868,6 +873,24 @@ pub(crate) mod de {
             let Some(mut next) = self.inner.values.pop_front() else {
                 return Ok(None);
             };
+
+            let mut this = Deserializer::new(&mut next, self.decode_option_as_variant);
+            seed.deserialize(&mut this).map(Some)
+        }
+    }
+
+    impl<'a, 'de> SeqAccess<'de> for Ctx<'a, values::Map> {
+        type Error = Error;
+
+        fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+        where
+            T: DeserializeSeed<'de>,
+        {
+            let Some(next) = self.inner.entries.pop_front() else {
+                return Ok(None);
+            };
+
+            let mut next = Value::Array(vec![next.0, next.1].into());
 
             let mut this = Deserializer::new(&mut next, self.decode_option_as_variant);
             seed.deserialize(&mut this).map(Some)
@@ -1044,4 +1067,18 @@ fn nested_variants() {
             inner: Some(V::Single((1920, 1200)))
         }
     );
+}
+
+#[test]
+fn map_as_vec() {
+    let mut m = std::collections::HashMap::new();
+    m.insert(1, "hi");
+    m.insert(5, "hello");
+
+    let val = crate::to_value(&m).unwrap();
+    println!("{val:?}");
+    let parsed = crate::from_value::<Vec<(i32, String)>>(val).unwrap();
+    assert!(parsed.contains(&(1, "hi".to_string())));
+    assert!(parsed.contains(&(5, "hello".to_string())));
+    assert_eq!(parsed.len(), 2);
 }
