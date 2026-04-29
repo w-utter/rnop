@@ -1,6 +1,6 @@
 mod put;
 #[cfg(feature = "serde")]
-mod serde;
+pub mod serde;
 mod take;
 mod values;
 

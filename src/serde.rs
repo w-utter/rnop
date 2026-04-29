@@ -1,4 +1,4 @@
-pub(crate) mod ser {
+pub mod ser {
     use crate::{Value, values};
     use serde::{Serialize, ser};
 
@@ -441,7 +441,7 @@ pub(crate) mod ser {
     }
 }
 
-pub(crate) mod de {
+pub mod de {
     use serde::de::{
         self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor,
     };
