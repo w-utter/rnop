@@ -4,7 +4,7 @@ pub mod serde;
 mod take;
 mod values;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     FixInt(i8),
     U8(u8),

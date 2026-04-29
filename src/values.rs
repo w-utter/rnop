@@ -5,7 +5,7 @@ use crate::take::TakeValue;
 
 use std::collections::VecDeque;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Table {
     hash: u64,
     entries: VecDeque<Entry>,
@@ -68,7 +68,7 @@ impl put::WriteValue for Table {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Entry {
     id: u64,
     val: Value,
@@ -109,7 +109,7 @@ impl Entry {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Error {
     inner: i64,
 }
@@ -140,7 +140,7 @@ impl put::WriteValue for Error {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Handle {
     value: Box<Value>,
     ref_num: i64,
@@ -186,7 +186,7 @@ impl put::WriteValue for Handle {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Variant {
     pub(crate) inner: Option<(i64, Box<Value>)>,
 }
@@ -278,7 +278,7 @@ impl put::WriteValue for Variant {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Structure {
     pub(crate) values: VecDeque<Value>,
 }
@@ -319,7 +319,7 @@ impl put::WriteValue for Structure {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Array {
     pub(crate) values: VecDeque<Value>,
 }
@@ -358,7 +358,7 @@ impl put::WriteValue for Array {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Map {
     pub(crate) entries: VecDeque<(Value, Value)>,
 }
@@ -429,7 +429,7 @@ impl put::WriteValue for Map {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Bytes {
     pub(crate) inner: Vec<u8>,
 }
@@ -462,7 +462,7 @@ impl put::WriteValue for Bytes {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct String {
     pub(crate) inner: Vec<u8>,
 }

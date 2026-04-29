@@ -446,6 +446,33 @@ pub mod de {
         self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor,
     };
 
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum TypeKind {
+        Bool,
+        Char,
+        Option,
+        U8,
+        U16,
+        U32,
+        U64,
+        I8,
+        I16,
+        I32,
+        I64,
+        F32,
+        F64,
+        Table,
+        Error,
+        Handle,
+        Variant,
+        Structure,
+        Array,
+        Map,
+        Bytes,
+        String,
+        Nil,
+    }
+
     use crate::{Value, values};
     pub(crate) struct Deserializer<'a> {
         pub(crate) input: Option<&'a mut Value>,
@@ -467,7 +494,9 @@ pub mod de {
 
     #[derive(Debug)]
     pub enum Error {
-        Mismatch,
+        Mismatch { expected: TypeKind, found: Value },
+        Utf8Parse,
+        MissingValue,
         Other,
     }
 
@@ -521,11 +550,11 @@ pub mod de {
                 }
                 Some(Value::Bytes(a)) => visitor.visit_bytes(&a.inner),
                 Some(Value::String(s)) => {
-                    let str = str::from_utf8(&s.inner).map_err(|_| Error::Mismatch)?;
+                    let str = str::from_utf8(&s.inner).map_err(|_| Error::Utf8Parse)?;
                     visitor.visit_str(str)
                 }
                 Some(Value::Nil) => visitor.visit_unit(),
-                _ => return Err(Error::Mismatch),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -533,8 +562,15 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            let Some(Value::FixInt(v)) = self.input.take() else {
-                return Err(Error::Mismatch);
+            let v = match self.input.take() {
+                Some(Value::FixInt(v @ (0 | 1))) => v,
+                Some(v) => {
+                    return Err(Error::Mismatch {
+                        expected: TypeKind::Bool,
+                        found: v.clone(),
+                    });
+                }
+                None => return Err(Error::MissingValue),
             };
 
             let inner = if *v == 0 {
@@ -542,7 +578,7 @@ pub mod de {
             } else if *v == 1 {
                 true
             } else {
-                return Err(Error::Mismatch);
+                unreachable!();
             };
             visitor.visit_bool(inner)
         }
@@ -553,7 +589,11 @@ pub mod de {
         {
             match self.input.take() {
                 Some(Value::FixInt(v) | Value::I8(v)) => visitor.visit_i8(*v),
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::I8,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -564,7 +604,11 @@ pub mod de {
             match self.input.take() {
                 Some(Value::FixInt(v) | Value::I8(v)) => visitor.visit_i16(*v as _),
                 Some(Value::I16(v)) => visitor.visit_i16(*v),
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::I16,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -576,7 +620,11 @@ pub mod de {
                 Some(Value::FixInt(v) | Value::I8(v)) => visitor.visit_i32(*v as _),
                 Some(Value::I16(v)) => visitor.visit_i32(*v as _),
                 Some(Value::I32(v)) => visitor.visit_i32(*v),
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::I32,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -589,7 +637,11 @@ pub mod de {
                 Some(Value::I16(v)) => visitor.visit_i64(*v as _),
                 Some(Value::I32(v)) => visitor.visit_i64(*v as _),
                 Some(Value::I64(v)) => visitor.visit_i64(*v),
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::I64,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -600,7 +652,11 @@ pub mod de {
             match self.input.take() {
                 Some(Value::FixInt(v)) if *v >= 0 => visitor.visit_u8(*v as _),
                 Some(Value::U8(v)) => visitor.visit_u8(*v),
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::U8,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -612,7 +668,11 @@ pub mod de {
                 Some(Value::FixInt(v)) if *v >= 0 => visitor.visit_u16(*v as _),
                 Some(Value::U8(v)) => visitor.visit_u16(*v as _),
                 Some(Value::U16(v)) => visitor.visit_u16(*v),
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::U16,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -625,7 +685,11 @@ pub mod de {
                 Some(Value::U8(v)) => visitor.visit_u32(*v as _),
                 Some(Value::U16(v)) => visitor.visit_u32(*v as _),
                 Some(Value::U32(v)) => visitor.visit_u32(*v),
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::U32,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -639,7 +703,11 @@ pub mod de {
                 Some(Value::U16(v)) => visitor.visit_u64(*v as _),
                 Some(Value::U32(v)) => visitor.visit_u64(*v as _),
                 Some(Value::U64(v)) => visitor.visit_u64(*v),
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::U64,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -647,10 +715,13 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            if let Some(Value::F32(v)) = self.input.take() {
-                visitor.visit_f32(*v)
-            } else {
-                return Err(Error::Mismatch);
+            match self.input.take() {
+                Some(Value::F32(v)) => visitor.visit_f32(*v),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::F32,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -658,10 +729,13 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            if let Some(Value::F64(v)) = self.input.take() {
-                visitor.visit_f64(*v)
-            } else {
-                return Err(Error::Mismatch);
+            match self.input.take() {
+                Some(Value::F64(v)) => visitor.visit_f64(*v),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::F64,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -673,12 +747,16 @@ pub mod de {
                 Some(Value::FixInt(v)) if *v >= 0 => visitor.visit_char(*v as u8 as char),
                 Some(Value::U8(v)) => visitor.visit_char(*v as _),
                 Some(Value::U16(v)) => {
-                    visitor.visit_char(char::from_u32(*v as _).ok_or(Error::Mismatch)?)
+                    visitor.visit_char(char::from_u32(*v as _).ok_or(Error::Utf8Parse)?)
                 }
                 Some(Value::U32(v)) => {
-                    visitor.visit_char(char::from_u32(*v).ok_or(Error::Mismatch)?)
+                    visitor.visit_char(char::from_u32(*v).ok_or(Error::Utf8Parse)?)
                 }
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::Char,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -686,11 +764,16 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            if let Some(Value::String(v)) = self.input.take() {
-                let str = str::from_utf8(&v.inner).map_err(|_| Error::Mismatch)?;
-                visitor.visit_str(str)
-            } else {
-                return Err(Error::Mismatch);
+            match self.input.take() {
+                Some(Value::String(v)) => {
+                    let str = str::from_utf8(&v.inner).map_err(|_| Error::Utf8Parse)?;
+                    visitor.visit_str(str)
+                }
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::String,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -698,11 +781,16 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            if let Some(Value::String(v)) = self.input.take() {
-                let str = String::try_from(v.inner.clone()).map_err(|_| Error::Mismatch)?;
-                visitor.visit_string(str)
-            } else {
-                return Err(Error::Mismatch);
+            match self.input.take() {
+                Some(Value::String(v)) => {
+                    let str = String::try_from(v.inner.clone()).map_err(|_| Error::Utf8Parse)?;
+                    visitor.visit_string(str)
+                }
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::String,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -710,10 +798,13 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            if let Some(Value::Bytes(v)) = self.input.take() {
-                visitor.visit_bytes(&v.inner)
-            } else {
-                return Err(Error::Mismatch);
+            match self.input.take() {
+                Some(Value::Bytes(v)) => visitor.visit_bytes(&v.inner),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::Bytes,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -721,10 +812,13 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            if let Some(Value::Bytes(v)) = self.input.take() {
-                visitor.visit_byte_buf(v.inner.clone())
-            } else {
-                return Err(Error::Mismatch);
+            match self.input.take() {
+                Some(Value::Bytes(v)) => visitor.visit_byte_buf(v.inner.clone()),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::Bytes,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -748,7 +842,11 @@ pub mod de {
                     self.input = Some(v);
                     visitor.visit_some(self)
                 }
-                _ => Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::Option,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -756,10 +854,14 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            let Some(Value::Nil) = self.input.take() else {
-                return Err(Error::Mismatch);
-            };
-            visitor.visit_unit()
+            match self.input.take() {
+                Some(Value::Nil) => visitor.visit_unit(),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::Option,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
+            }
         }
 
         fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
@@ -787,7 +889,11 @@ pub mod de {
                 Some(Value::Map(m)) => {
                     visitor.visit_seq(Ctx::new(m, self.decode_option_as_variant))
                 }
-                _ => return Err(Error::Mismatch),
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::Array,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
             }
         }
 
@@ -814,11 +920,16 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            let Some(Value::Map(map)) = self.input.take() else {
-                return Err(Error::Mismatch);
-            };
-
-            visitor.visit_map(Ctx::new(map, self.decode_option_as_variant))
+            match self.input.take() {
+                Some(Value::Map(map)) => {
+                    visitor.visit_map(Ctx::new(map, self.decode_option_as_variant))
+                }
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::Map,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
+            }
         }
 
         fn deserialize_struct<V>(
@@ -830,10 +941,16 @@ pub mod de {
         where
             V: Visitor<'de>,
         {
-            let Some(Value::Structure(st)) = self.input.take() else {
-                return Err(Error::Mismatch);
-            };
-            visitor.visit_seq(Ctx::new(st, self.decode_option_as_variant))
+            match self.input.take() {
+                Some(Value::Structure(st)) => {
+                    visitor.visit_seq(Ctx::new(st, self.decode_option_as_variant))
+                }
+                Some(v) => Err(Error::Mismatch {
+                    expected: TypeKind::Array,
+                    found: v.clone(),
+                }),
+                None => Err(Error::MissingValue),
+            }
         }
 
         fn deserialize_enum<V>(
@@ -947,7 +1064,7 @@ pub mod de {
             V: DeserializeSeed<'de>,
         {
             let Some((_, mut val)) = self.inner.entries.pop_front() else {
-                return Err(Error::Mismatch);
+                return Err(Error::MissingValue);
             };
 
             let mut this = Deserializer::new(&mut val, self.decode_option_as_variant);
@@ -962,8 +1079,15 @@ pub mod de {
         where
             V: DeserializeSeed<'de>,
         {
-            let Some(Value::Variant(values::Variant { inner })) = self.input.take() else {
-                return Err(Error::Mismatch);
+            let inner = match self.input.take() {
+                Some(Value::Variant(values::Variant { inner })) => inner,
+                Some(v) => {
+                    return Err(Error::Mismatch {
+                        expected: TypeKind::Variant,
+                        found: v.clone(),
+                    });
+                }
+                None => return Err(Error::MissingValue),
             };
 
             let (variant, val) = inner
@@ -985,7 +1109,7 @@ pub mod de {
         type Error = Error;
 
         fn unit_variant(self) -> Result<()> {
-            Err(Error::Mismatch)
+            Err(Error::Other)
         }
 
         fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
